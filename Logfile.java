@@ -15,18 +15,16 @@ public class Logfile {
     private TimeStampSort sortByTS;
     private LastSearch searchKind;
     private int startIdx, endIdx;
-    private LowerBound lowerBoundCompare;
-    private UpperBound upperBoundCompare;
     private LogEntry startLog;
     private LogEntry endLog;
-    Logfile(String fileName) {
+    Logfile(String fileName) { // constructor
+        // initialize ALs, enum, and indices for binary search.
         masterList = new ArrayList<>();
         sortByTS = new TimeStampSort();
-        lowerBoundCompare = new LowerBound();
-        upperBoundCompare = new UpperBound();
         searchKind = LastSearch.None;
         startIdx = endIdx = -1;
 
+        // try to grab the info from the file given there is a file to read.
         try {
             int entryId = 0;
             Scanner in = new Scanner(new File(fileName));
@@ -36,17 +34,20 @@ public class Logfile {
                 if (line.charAt(14) != '|') { // check for bad timestamps.
                     continue;
                 }
-                masterList.add(new LogEntry(line));
-                masterList.get(entryId).setEntryId(entryId);
-                entryId++;
+                masterList.add(new LogEntry(line)); // valid log entry, so add it to our masterList
+                masterList.get(entryId).setEntryId(entryId); // set the entry id for the LogEntry.
+                entryId++; // increment the entry id.
             }
 
 
-        } catch (FileNotFoundException e) {
+        } catch (FileNotFoundException e) { // no file found.
             System.err.println(fileName + " not found.");
             System.exit(1);
         }
+        // the size of the masterList is the number of valid logentries we have read from the file.
         System.out.println(masterList.size() + " entries read");
+
+        // call postProcess after we have the data we need.
         postProcess();
     }
     /**
@@ -72,7 +73,7 @@ public class Logfile {
             indexMap.set(entry.getId(), i);
         }
         
-        // to prepare in the event category search is called:
+        // to prepare in the event each search is called:
         prepCategorySearch();
         prepKeywordSearch();
         // for search results from searching
@@ -80,24 +81,26 @@ public class Logfile {
     }
 
     private void prepKeywordSearch() {
+        // keep a hashmap where k = the requested keyword, and v = the log entries that contain that keyword
         keywordMap = new HashMap<>();
+        // iterate through the masterlist and
         for(int i = 0; i < masterList.size(); i++) {
             LogEntry currEntry = masterList.get(i);
             // split up the entry into an array of keywords
             String[] keywords = currEntry.getRaw().substring(15).toLowerCase().split("[^a-zA-Z0-9]+");
-            //System.err.println("CURRENT LINE BROKEN INTO STRINGS: ");
-            //System.err.println(Arrays.toString(keywords));
+
             for(int j = 0; j < keywords.length; j++) {
                 String kwd = keywords[j];
                 if (kwd.isBlank()) {
+                    // blank; nothing to do here.
                     continue;
                 }
                 // else, add the index to the entry for the keyword
-                if(!keywordMap.containsKey(kwd)) {
+                if(!keywordMap.containsKey(kwd)) { // if we haven't already seen this keyword, create a key, val.
                     keywordMap.put(kwd, new ArrayList<>());
-                    keywordMap.get(kwd).add(i);
+                    keywordMap.get(kwd).add(i);// add our current log INDEX to the arraylist of logs that match the key.
                 }
-
+                // otherwise, we have already seen this keyword. add idx to the arraylist at this key.
                 if (keywordMap.get(kwd).size() > 0 //if there is more than one element & the prev element isnt a repeat
                         && keywordMap.get(kwd).get(keywordMap.get(kwd).size() - 1) != i) {
                         keywordMap.get(kwd).add(i);
@@ -108,38 +111,50 @@ public class Logfile {
     }
 
     public int keywordSearch(ArrayList<String> keywords) {
-        hashSearchResults.clear();
-        searchKind = LastSearch.Keyword;
+        hashSearchResults.clear(); // we don't need the previous search results.
+        searchKind = LastSearch.Keyword; // set enum to keyword
+        boolean isNull = false; // boolean in order to catch keyword requests that dont exist in the file
 
 
-        // "intialize" the AL with the set of logs that fit the first keyword so that we can compare.
-
-        // loop through and keep track of the intersection as we evaluate each set of indices.
+        // if there is more than one keyword requested and we need to iterate through the keywords...
         if(keywords.size() > 1 && keywordMap.get(keywords.get(0)) != null) {
+            // intialize the hashset in order to find the intersection of all keyword logs.
             idxSet = new HashSet<>();
+            // add all the logs which contain the first requested keyword.
             idxSet.addAll(keywordMap.get(keywords.get(0)));
 
+
             for(int i = 1; i < keywords.size(); i++) {
+                // if it hits null then there are NO logs that contain all of the keywords requested.
                 if(keywordMap.get(keywords.get(i)) != null) {
+                    // retain the INTERSECTION of our first keyword and logs that contain the NEXT requested keyword.
                     idxSet.retainAll(keywordMap.get(keywords.get(i)));
                 }
-                else {
+                else { // then the keyword given does not exist in any file.
                     System.err.println("The keyword '" + keywords.get(i) + "' " + "does not exist in the file. ");
+                    isNull = true; // we found a bad keyword request; no logs exist with the all requested keywords.
+                    break;
                 }
             }
-            hashSearchResults.addAll(idxSet);
+            if(!isNull) { // otherwise there exists some log(s) that contain all keywords
+                hashSearchResults.addAll(idxSet);
+            }
+
+
             // now we need to sort the results
             Collections.sort(hashSearchResults);
-        }
+        } // if there is only one keyword requested, add the logs that fit that one keyword
         else if (keywordMap.get(keywords.get(0)) != null){
             hashSearchResults.addAll(keywordMap.get(keywords.get(0)));
         }
         else {
+            // for my own use; the first given keyword does not exist in the file.
             System.err.println("The keyword '" + keywords.get(0) + "' " + "does not exist in the file. ");
         }
-
+        // print out how many logs we found.
         System.out.println("Keyword search: " + hashSearchResults.size() + " entries found");
 
+        // return the size of the hashSearchResults as per the spec.
         return hashSearchResults.size();
     }
 
@@ -152,6 +167,7 @@ public class Logfile {
      lowercase categories for searching purposes; input as lowercase for searching
      */
     private void prepCategorySearch() {
+        // hash map to contain the logs which fit the requested category
         categoryMap = new HashMap<>();
         for(int i = 0; i < masterList.size(); i++) {
             LogEntry curr = masterList.get(i);
@@ -176,10 +192,12 @@ public class Logfile {
         if (categoryMap.get(category.toLowerCase()) != null) {
             hashSearchResults.addAll(categoryMap.get(category.toLowerCase()));
         }
-        else {
+        else { // personal message
             System.err.println("There is no such category in the master list.");
         }
+        // print how many entries we fould
         System.out.println("Category search: " + hashSearchResults.size() + " entries found");
+        // return the search results size as per spec.
         return hashSearchResults.size();
     }
 
@@ -193,14 +211,17 @@ public class Logfile {
      */
 
     public int timeStampSearch(String start, String end) {
+        // set the enum to timestamp
         searchKind = LastSearch.Timestamp;
+        // clear whatever other search results were before; no longer interested.
         hashSearchResults.clear();
         this.startLog = new LogEntry(start); //fixme: these might be memory intensive; if so, maybe instantiate once
         this.endLog = new LogEntry(end);    //  and make a method to modify the timestamp within this method?
         if (startLog.getTimestamp() > endLog.getTimestamp()) {
             System.err.println("The starting timestamp cannot be later than the ending timestamp.");
         }
-        else if(startLog.getTimestamp() == endLog.getTimestamp()) { // matching timestamp search
+        //todo: check for if this is an 'm' search
+        else if(startLog.getTimestamp() == endLog.getTimestamp()) {
             startIdx = (Collections.binarySearch(masterList, startLog, new LowerBound()) + 1) * -1;
             for(int i = startIdx; i < masterList.size(); i++) {
                 if(masterList.get(i).getTimestamp() == masterList.get(startIdx).getTimestamp()) {
@@ -210,7 +231,7 @@ public class Logfile {
                     break;
                 }
             }
-            System.out.println("Timestamps search: " + hashSearchResults.size() + " entries found");
+            System.out.println("Timestamp search: " + hashSearchResults.size() + " entries found");
         }
         else {
             startIdx = (Collections.binarySearch(masterList, startLog, new LowerBound()) + 1) * -1;
@@ -240,7 +261,8 @@ public class Logfile {
     }
 
     public void appendSearchResults() {
-        if (searchKind == LastSearch.Category) {
+        // if there was a search performed previously, iterate through and add the search results to the exerpt list
+        if (searchKind != LastSearch.None) {
             for(int i = 0; i < hashSearchResults.size(); i++) {
                 int masterListIdx = hashSearchResults.get(i);
                 LogEntry appendLog = masterList.get(masterListIdx);
@@ -248,29 +270,11 @@ public class Logfile {
             }
             System.out.println(hashSearchResults.size() + " log entries appended");
 
-        }
-        if (searchKind == LastSearch.Timestamp) {
-            for(int i = 0; i < hashSearchResults.size(); i++) {
-                int masterListIdx = hashSearchResults.get(i);
-                LogEntry appendLog = masterList.get(masterListIdx);
-                excerptList.add(appendLog);
-            }
-            System.out.println(hashSearchResults.size() + " log entries appended");
-
-        }
-        if (searchKind == LastSearch.Keyword) {
-            for(int i = 0; i < hashSearchResults.size(); i++) {
-                int masterListIdx = hashSearchResults.get(i);
-                LogEntry appendLog = masterList.get(masterListIdx);
-                excerptList.add(appendLog);
-            }
-            System.out.println(hashSearchResults.size() + " log entries appended");
         }
     }
 
-    // when i go to output, i really should only be accessing indexMap for that information?
     public void appendExcerpt(int entryIdx) {
-        //fixme: within the indexMap, the indices of indexMap are associated with the entryId of the masterList.
+        // within the indexMap, the indices of indexMap are associated with the entryId of the masterList.
         // therefore, we need to grab the value in the index of masterList by looking at the index of indexMap.
         // basically, if entryIdx was 1, we go indexMap[1] --> masterList[indexMap[1]] <---
 
@@ -279,6 +283,7 @@ public class Logfile {
             System.err.println("Bad index.");
         }
         else {
+            // append the requested index to the excerpt list.
             int masterListIdx = indexMap.get(entryIdx);
 
             LogEntry appendLog = masterList.get(masterListIdx);
@@ -290,11 +295,12 @@ public class Logfile {
     }
 
     public void clearList() {
-        if(excerptList.isEmpty()) {
+        if(excerptList.isEmpty()) { // check if the list is already empty
             System.out.println("excerpt list cleared");
             System.out.println("(previously empty)");
         }
         else {
+            // otherwise, print the requested info and clear the list.
             System.out.println("excerpt list cleared");
             System.out.println("previous contents:");
             System.out.println("0" + "|"
@@ -307,6 +313,7 @@ public class Logfile {
         }
     }
 
+    // iterate through the excerpt list and print out the position and message of the entry.
     public void printExcerptList() {
         for(int i = 0; i < excerptList.size(); i++) {
             LogEntry currEntry = excerptList.get(i);
@@ -315,22 +322,26 @@ public class Logfile {
 
     }
 
+
     public void deleteEntry(int entryIndex) {
+        // check for proper indices
         if(entryIndex > excerptList.size() - 1 || entryIndex < 0) {
             System.err.println("That is not a valid excerpt list index. ");
         }
-        else {
-            // remove the item from the list; then, iterate from that point and fix the excerptEntryIds
+        else { // remove the entry at the requested index
             excerptList.remove(entryIndex);
             System.out.println("Deleted excerpt list entry " + entryIndex);
         }
     }
 
     public void entryToBeginning(int entryIndex) {
+        // index valid check
         if(entryIndex > excerptList.size() - 1|| entryIndex < 0) {
             System.err.println("That is not a valid excerpt list index. ");
         } else {
+            // add it at position 0
             excerptList.add(0, excerptList.get(entryIndex)); // move the requested entry to the beginning
+            // remove the duplicate entry that we moved
             excerptList.remove(entryIndex + 1);
 
             System.out.println("Moved excerpt list entry " + entryIndex);
@@ -338,12 +349,15 @@ public class Logfile {
 
     }
     public void entryToEnd(int entryIndex) {
+        // check for valid index
         if(entryIndex > excerptList.size() - 1|| entryIndex < 0) {
             System.err.println("That is not a valid excerpt list index. ");
         }
         else {
+            // add the entry to the end of the list
             LogEntry entryToEnd = excerptList.get(entryIndex);
             excerptList.add(entryToEnd);
+            // remove the previous duplicate entry at the original location
             excerptList.remove(entryIndex);
 
             System.out.println("Moved excerpt list entry " + entryIndex);
@@ -355,6 +369,7 @@ public class Logfile {
 
 
     public void sortExcListByTS() {
+        // if there are items in the excerpt list
         if(excerptList.size() > 0) {
             // print old ordering
             System.out.println("excerpt list sorted");
@@ -365,7 +380,7 @@ public class Logfile {
             System.out.println(excerptList.size() - 1 + "|"
                     + excerptList.get(excerptList.size() - 1).getLogLine());
 
-            // sort
+            // sort by our timestamp comparator
             Collections.sort(excerptList, sortByTS);
 
 
@@ -378,7 +393,7 @@ public class Logfile {
                     + excerptList.get(excerptList.size() - 1).getLogLine());
 
         }
-        else {
+        else { // the excerpt list was empty, print info according to spec
             System.out.println("excerpt list sorted");
             System.out.println("(previously empty)");
         }
@@ -386,6 +401,7 @@ public class Logfile {
 
     }
 
+    // print the masterlist out
     public int size() {
         return masterList.size();
     }
@@ -398,30 +414,5 @@ public class Logfile {
         Keyword
     }
 
-    public void keyWordTest() {
-        System.err.println("LogEntry 'getMessage' test on first entry: ");
-        System.err.println(masterList.get(0).getMessage());
 
-        System.err.println("LogEntry 'getCategory' test on first entry: ");
-        System.err.println(masterList.get(0).getCategory());
-
-    }
-
-    private void masterListTest() {
-        System.out.println("-----MASTER LIST REPRESENTATION OF LOG ENTRIES-----");
-        for(int i = 0; i < masterList.size(); i++) {
-            LogEntry currEntry = masterList.get(i);
-            System.out.println(currEntry.getLogLine());
-        }
-
-    }
-    private void idxListTest() {
-
-        System.out.println("-----INDEX MAP REPRESENTATION OF LOG ENTRIES-----");
-        for(int i = 0; i < indexMap.size(); i++) {
-            int masterListIdx = indexMap.get(i);
-            LogEntry idxMapEntry = masterList.get(masterListIdx);
-            System.out.println(idxMapEntry.getLogLine());
-        }
-    }
 }
