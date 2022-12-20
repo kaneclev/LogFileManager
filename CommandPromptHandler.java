@@ -90,13 +90,6 @@ public class CommandPromptHandler {
                             }
                             lf.keywordSearch(kwds);
                             break;
-                        case 'z': // personal tests
-                            argument = line.substring(2);
-                            if(argument.equals("keyword")) {
-                                lf.keyWordTest();
-                            }
-
-                            break;
                         default:
                             System.err.println("Unexpected command: " + command);
                     } // end of switch
